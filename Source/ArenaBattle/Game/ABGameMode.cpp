@@ -8,6 +8,7 @@
 // < 이모양의 괄호가 최근 C++에서 권장하는 인클루드 구문입니다.
 // " 따옴표는 같은 경로에 있는 헤더 인클루드할 때 사용하라고 권장합니다.
 #include <ArenaBattle.h>
+#include "ABGameState.h"
 
 AABGameMode::AABGameMode()
 {
@@ -22,6 +23,8 @@ AABGameMode::AABGameMode()
 	{
 		PlayerControllerClass = PlayerControllerClassRef.Class;
 	}
+
+	GameStateClass = AABGameState::StaticClass();
 }
 
 void AABGameMode::OnPlayerDead()
@@ -35,6 +38,7 @@ void AABGameMode::PreLogin(
 	const FUniqueNetIdRepl& UniqueId, 
 	FString& ErrorMessage)
 {
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("==============================="));
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
 
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
