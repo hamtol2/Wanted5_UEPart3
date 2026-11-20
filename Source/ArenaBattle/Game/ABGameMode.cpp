@@ -43,6 +43,11 @@ void AABGameMode::PreLogin(
 
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 
+	// 클라이언트 접속 거부 처리.
+	// ErrorMessage 값에 빈 문자열이 아닌 값을 설정하면 접속 거부 가능.
+	// GameModeBase.h의 PreLogin 함수 선언의 설명 참고.
+	//ErrorMessage = TEXT("Server is full");
+
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
 }
 
@@ -76,8 +81,8 @@ void AABGameMode::PostLogin(APlayerController* NewPlayer)
 void AABGameMode::StartPlay()
 {
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-
+	
 	Super::StartPlay();
-
+	
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
 }
