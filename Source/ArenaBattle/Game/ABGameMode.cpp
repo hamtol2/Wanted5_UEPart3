@@ -43,10 +43,32 @@ void AABGameMode::PreLogin(
 
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 
-	// 클라이언트 접속 거부 처리.
-	// ErrorMessage 값에 빈 문자열이 아닌 값을 설정하면 접속 거부 가능.
-	// GameModeBase.h의 PreLogin 함수 선언의 설명 참고.
-	//ErrorMessage = TEXT("Server is full");
+	// NetDriver 가져오기.
+	UNetDriver* NetDriver = GetNetDriver();
+	if (NetDriver)
+	{
+		// 서버 입장에서 클라이언트의 접속이 있는지 확인.
+		if (NetDriver->ClientConnections.Num() == 0)
+		{
+			AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("No client connections"));
+		}
+		else
+		{
+			for (const auto& Connection : NetDriver->ClientConnections)
+			{
+				AB_LOG(
+					LogABNetwork, 
+					Log, 
+					TEXT("Client connection: %s"), 
+					*Connection->GetName()
+				);
+			}
+		}
+	}
+	else
+	{
+		AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("No NetDriver"));
+	}
 
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
 }
