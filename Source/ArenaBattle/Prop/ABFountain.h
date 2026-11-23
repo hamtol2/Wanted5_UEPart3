@@ -23,6 +23,9 @@ protected:
 		TArray<FLifetimeProperty>& OutLifetimeProps
 	) const override;
 
+	virtual void OnActorChannelOpen(
+		class FInBunch& InBunch, class UNetConnection* Connection) override;
+
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -33,8 +36,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = Mesh)
 	TObjectPtr<class UStaticMeshComponent> Water;
 
+	// 속성 변경됐을 때 호출될 콜백 함수.
+	// -> 클라이언트에서 값이 변경될 때 호출.
+	UFUNCTION()
+	void OnRep_ServerRotationYaw();
+
 	// 회전에 사용할 속성 ( 리플리케이션 옵션 지정 ).
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing = OnRep_ServerRotationYaw)
 	float ServerRotationYaw;
 
 	// 회전 속도.

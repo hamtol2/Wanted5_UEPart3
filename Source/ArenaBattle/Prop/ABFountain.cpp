@@ -4,11 +4,12 @@
 #include "Prop/ABFountain.h"
 #include "Components/StaticMeshComponent.h"
 #include <Net/UnrealNetwork.h>
+#include <ArenaBattle.h>
 
 // Sets default values
 AABFountain::AABFountain()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
@@ -38,7 +39,21 @@ AABFountain::AABFountain()
 void AABFountain::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	// 타이머를 활용해 로직 반복 실행.
+	// 서버에서만 실행.
+	//if (HasAuthority())
+	//{
+	//	FTimerHandle Handle;
+	//	GetWorld()->GetTimerManager().SetTimer(
+	//		Handle,
+	//		FTimerDelegate::CreateLambda([&]()
+	//			{
+	//				ServerRotationYaw += 1.0f;
+	//			}
+	//		), 1.0f, true
+	//	);
+	//}
 }
 
 void AABFountain::GetLifetimeReplicatedProps(
@@ -48,6 +63,15 @@ void AABFountain::GetLifetimeReplicatedProps(
 
 	// 리플리케이션 대상 속성 추가.
 	DOREPLIFETIME(AABFountain, ServerRotationYaw);
+}
+
+void AABFountain::OnActorChannelOpen(FInBunch& InBunch, UNetConnection* Connection)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+
+	Super::OnActorChannelOpen(InBunch, Connection);
+
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
 }
 
 // Called every frame
@@ -69,13 +93,28 @@ void AABFountain::Tick(float DeltaTime)
 	else
 	{
 		// 서버로 부터 전달 받은 "변경된 회전 값"을 적용(피치/롤 값은 유지).
-		FRotator NewRotator = RootComponent->GetComponentRotation();
+		//FRotator NewRotator = RootComponent->GetComponentRotation();
 
 		// 요 회전 값은 서버로부터 전달 받은 값 설정.
-		NewRotator.Yaw = ServerRotationYaw;
+		//NewRotator.Yaw = ServerRotationYaw;
 
 		// 루트 컴포넌트에 회전 설정.
-		RootComponent->SetWorldRotation(NewRotator);
+		//RootComponent->SetWorldRotation(NewRotator);
 	}
+}
+
+void AABFountain::OnRep_ServerRotationYaw()
+{
+	// 로그 출력.
+	AB_LOG(LogABNetwork, Log, TEXT("Yaw: %f"), ServerRotationYaw);
+
+	// 서버로 부터 전달 받은 "변경된 회전 값"을 적용(피치/롤 값은 유지).
+	FRotator NewRotator = RootComponent->GetComponentRotation();
+
+	// 요 회전 값은 서버로부터 전달 받은 값 설정.
+	NewRotator.Yaw = ServerRotationYaw;
+
+	// 루트 컴포넌트에 회전 설정.
+	RootComponent->SetWorldRotation(NewRotator);
 }
 
