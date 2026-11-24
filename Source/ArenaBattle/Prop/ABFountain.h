@@ -31,6 +31,9 @@ protected:
 		const AActor* ViewTarget, 
 		const FVector& SrcLocation) const override;
 
+	virtual void PreReplication(
+		IRepChangedPropertyTracker& ChangedPropertyTracker) override;
+
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -46,9 +49,15 @@ public:
 	UFUNCTION()
 	void OnRep_ServerRotationYaw();
 
+	UFUNCTION()
+	void OnRep_ServerLightColor();
+
 	// 회전에 사용할 속성 ( 리플리케이션 옵션 지정 ).
 	UPROPERTY(ReplicatedUsing = OnRep_ServerRotationYaw)
 	float ServerRotationYaw;
+
+	UPROPERTY(ReplicatedUsing = OnRep_ServerLightColor)
+	FLinearColor ServerLightColor;
 
 	// 회전 속도.
 	float RotationRate = 30.0f;
@@ -58,4 +67,10 @@ public:
 
 	// 서버로 부터 데이터를 받고, 그 다음 데이터를 받았을 때까지 걸린 시간.
 	float ClientTimeBetweenLastUpdate = 0.0f;
+
+	//// 의도적으로 네트워크를 포화 상태로 만들기 위한 변수.
+	//UPROPERTY(Replicated)
+	//TArray<float> BigData;
+	//
+	//float BigDataElement = 0.0f;
 };

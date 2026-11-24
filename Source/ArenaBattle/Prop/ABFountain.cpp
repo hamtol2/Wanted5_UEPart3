@@ -3,8 +3,9 @@
 
 #include "Prop/ABFountain.h"
 #include "Components/StaticMeshComponent.h"
-#include <Net/UnrealNetwork.h>
 #include <ArenaBattle.h>
+#include <Net/UnrealNetwork.h>
+#include <Components/PointLightComponent.h>
 
 // Sets default values
 AABFountain::AABFountain()
@@ -42,6 +43,9 @@ AABFountain::AABFountain()
 	// 연관성 판정 거리값 설정 (NetCullDistanceSquared).
 	//NetCullDistanceSquared = 4000000.0f;		// 20미터.
 	SetNetCullDistanceSquared(4000000.0f);
+
+	// 휴면 상태로 설정.
+	//SetNetDormancy(DORM_Initial);
 }
 
 // Called when the game starts or when spawned
@@ -51,18 +55,47 @@ void AABFountain::BeginPlay()
 
 	// 타이머를 활용해 로직 반복 실행.
 	// 서버에서만 실행.
-	//if (HasAuthority())
-	//{
-	//	FTimerHandle Handle;
-	//	GetWorld()->GetTimerManager().SetTimer(
-	//		Handle,
-	//		FTimerDelegate::CreateLambda([&]()
-	//			{
-	//				ServerRotationYaw += 1.0f;
-	//			}
-	//		), 1.0f, true
-	//	);
-	//}
+	if (HasAuthority())
+	{
+		FTimerHandle Handle;
+		GetWorld()->GetTimerManager().SetTimer(
+			Handle,
+			FTimerDelegate::CreateLambda([&]()
+				{
+					//ServerRotationYaw += 1.0f;
+
+					// 데이터 설정.
+					//BigData.Init(BigDataElement, 100);
+
+					// 데이터 요소 값 업데이트.
+					//BigDataElement += 1.0f;
+
+					// 랜덤으로 색상 값 선택.
+					ServerLightColor = FLinearColor(
+						FMath::RandRange(0.0f, 1.0f),
+						FMath::RandRange(0.0f, 1.0f),
+						FMath::RandRange(0.0f, 1.0f)
+					);
+
+					// 서버에서는 OnRep_ 콜백 함수가 자동 실행되지 않음.
+					// 따라서 필요 시에는 명시적으로 호출해야함.
+					OnRep_ServerLightColor();
+				}
+			), 1.0f, true
+		);
+
+		// 두번째 타이머: 휴면 상태 깨우는 데 사용.
+		FTimerHandle Handle2;
+		GetWorld()->GetTimerManager().SetTimer(
+			Handle2,
+			FTimerDelegate::CreateLambda([&]()
+				{
+					// 깨우기.
+					//FlushNetDormancy();
+				}
+			), 10.0f, false
+		);
+	}
 }
 
 void AABFountain::GetLifetimeReplicatedProps(
@@ -72,6 +105,9 @@ void AABFountain::GetLifetimeReplicatedProps(
 
 	// 리플리케이션 대상 속성 추가.
 	DOREPLIFETIME(AABFountain, ServerRotationYaw);
+	//DOREPLIFETIME(AABFountain, BigData);
+	//DOREPLIFETIME(AABFountain, ServerLightColor);
+	DOREPLIFETIME_CONDITION(AABFountain, ServerLightColor, COND_InitialOnly);
 }
 
 void AABFountain::OnActorChannelOpen(FInBunch& InBunch, UNetConnection* Connection)
@@ -104,6 +140,13 @@ bool AABFountain::IsNetRelevantFor(
 	return Result;
 }
 
+void AABFountain::PreReplication(IRepChangedPropertyTracker& ChangedPropertyTracker)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+
+	Super::PreReplication(ChangedPropertyTracker);
+}
+
 // Called every frame
 void AABFountain::Tick(float DeltaTime)
 {
@@ -132,29 +175,30 @@ void AABFountain::Tick(float DeltaTime)
 		//RootComponent->SetWorldRotation(NewRotator);
 
 		// 서버로부터 데이터를 받은 이후에 경과한 시간 기록.
-		//ClientTimeSinceUpdate += DeltaTime;
+		ClientTimeSinceUpdate += DeltaTime;
 
-		//// 서버로부터 데이터를 받은 이후에 경과한 시간이 얼마 안됐으면 종료.
-		//if (ClientTimeBetweenLastUpdate < KINDA_SMALL_NUMBER)
-		//{
-		//	return;
-		//}
+		// 서버로부터 데이터를 받은 이후에 경과한 시간이 얼마 안됐으면 종료.
+		if (ClientTimeBetweenLastUpdate < KINDA_SMALL_NUMBER)
+		{
+			return;
+		}
 
-		//// 회전 예측 값 - 다음에 전달 받을 회전의 예측 값.
-		//const float EstimateRotationYaw = ServerRotationYaw + RotationRate * ClientTimeBetweenLastUpdate;
+		// 회전 예측 값 - 다음에 전달 받을 회전의 예측 값.
+		const float EstimateRotationYaw 
+			= ServerRotationYaw + RotationRate * ClientTimeBetweenLastUpdate;
 
-		//// 보간 시간 계산(t 또는 alpha).
-		//const float LerpRatio = ClientTimeSinceUpdate / ClientTimeBetweenLastUpdate;
+		// 보간 시간 계산(t 또는 alpha).
+		const float LerpRatio = ClientTimeSinceUpdate / ClientTimeBetweenLastUpdate;
 
-		//// 클라이언트 보간.
-		//const float ClientNewYaw 
-		//	= FMath::Lerp(ServerRotationYaw, EstimateRotationYaw, LerpRatio);
+		// 클라이언트 보간.
+		const float ClientNewYaw 
+			= FMath::Lerp(ServerRotationYaw, EstimateRotationYaw, LerpRatio);
 
-		//FRotator ClientRotator = RootComponent->GetComponentRotation();
-		//ClientRotator.Yaw = ClientNewYaw;
+		FRotator ClientRotator = RootComponent->GetComponentRotation();
+		ClientRotator.Yaw = ClientNewYaw;
 
-		//// 회전 값 설정.
-		//RootComponent->SetWorldRotation(ClientRotator);
+		// 회전 값 설정.
+		RootComponent->SetWorldRotation(ClientRotator);
 	}
 }
 
@@ -177,5 +221,26 @@ void AABFountain::OnRep_ServerRotationYaw()
 
 	// 경과 시간 초기화.
 	ClientTimeSinceUpdate = 0.0f;
+}
+
+void AABFountain::OnRep_ServerLightColor()
+{
+	// 서버가 아닌 경우, 전달된 값 출력.
+	if (!HasAuthority())
+	{
+		AB_LOG(
+			LogABNetwork,
+			Log,
+			TEXT("LightColor: %s"),
+			*ServerLightColor.ToString()
+		);
+	}
+
+	// 컴포넌트를 검색해서 전달 받은(또는 변경한) 라이트 색상 설정.
+	UPointLightComponent* PointLight = GetComponentByClass<UPointLightComponent>();
+	if (PointLight)
+	{
+		PointLight->SetLightColor(ServerLightColor);
+	}
 }
 
