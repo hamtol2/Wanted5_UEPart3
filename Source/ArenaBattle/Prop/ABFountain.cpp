@@ -70,16 +70,27 @@ void AABFountain::BeginPlay()
 					// 데이터 요소 값 업데이트.
 					//BigDataElement += 1.0f;
 
-					// 랜덤으로 색상 값 선택.
-					ServerLightColor = FLinearColor(
-						FMath::RandRange(0.0f, 1.0f),
-						FMath::RandRange(0.0f, 1.0f),
-						FMath::RandRange(0.0f, 1.0f)
-					);
+					//// 랜덤으로 색상 값 선택.
+					//ServerLightColor = FLinearColor(
+					//	FMath::RandRange(0.0f, 1.0f),
+					//	FMath::RandRange(0.0f, 1.0f),
+					//	FMath::RandRange(0.0f, 1.0f)
+					//);
 
-					// 서버에서는 OnRep_ 콜백 함수가 자동 실행되지 않음.
-					// 따라서 필요 시에는 명시적으로 호출해야함.
-					OnRep_ServerLightColor();
+					//// 서버에서는 OnRep_ 콜백 함수가 자동 실행되지 않음.
+					//// 따라서 필요 시에는 명시적으로 호출해야함.
+					//OnRep_ServerLightColor();
+
+					//// 멀티캐스트 RPC로 전달할 색상 값.
+					//const FLinearColor NewLightColor = FLinearColor(
+					//	FMath::RandRange(0.0f, 1.0f),
+					//	FMath::RandRange(0.0f, 1.0f),
+					//	FMath::RandRange(0.0f, 1.0f)
+					//);
+
+					//// 멀티캐스트 RPG 호출(서버에서 호출).
+					//// -> 서버 포함 모든 클라이언트에서 _Implementation 함수 실행됨.
+					//MulticastRPCChangeLightColor(NewLightColor);
 				}
 			), 1.0f, true
 		);
@@ -96,6 +107,20 @@ void AABFountain::BeginPlay()
 			), 10.0f, false
 		);
 	}
+	// 클라이언트.
+	else
+	{
+		// 클라이언트에서 서버 RPC 함수 호출.
+		FTimerHandle Handle;
+		GetWorld()->GetTimerManager().SetTimer(
+			Handle,
+			FTimerDelegate::CreateLambda([&]()
+				{
+					ServerRPCChangeLightColor();
+				}
+			), 1.0f, true
+		);
+	}
 }
 
 void AABFountain::GetLifetimeReplicatedProps(
@@ -106,8 +131,8 @@ void AABFountain::GetLifetimeReplicatedProps(
 	// 리플리케이션 대상 속성 추가.
 	DOREPLIFETIME(AABFountain, ServerRotationYaw);
 	//DOREPLIFETIME(AABFountain, BigData);
-	//DOREPLIFETIME(AABFountain, ServerLightColor);
-	DOREPLIFETIME_CONDITION(AABFountain, ServerLightColor, COND_InitialOnly);
+	DOREPLIFETIME(AABFountain, ServerLightColor);
+	//DOREPLIFETIME_CONDITION(AABFountain, ServerLightColor, COND_InitialOnly);
 }
 
 void AABFountain::OnActorChannelOpen(FInBunch& InBunch, UNetConnection* Connection)
@@ -120,8 +145,8 @@ void AABFountain::OnActorChannelOpen(FInBunch& InBunch, UNetConnection* Connecti
 }
 
 bool AABFountain::IsNetRelevantFor(
-	const AActor* RealViewer, 
-	const AActor* ViewTarget, 
+	const AActor* RealViewer,
+	const AActor* ViewTarget,
 	const FVector& SrcLocation) const
 {
 	bool Result = Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
@@ -184,14 +209,14 @@ void AABFountain::Tick(float DeltaTime)
 		}
 
 		// 회전 예측 값 - 다음에 전달 받을 회전의 예측 값.
-		const float EstimateRotationYaw 
+		const float EstimateRotationYaw
 			= ServerRotationYaw + RotationRate * ClientTimeBetweenLastUpdate;
 
 		// 보간 시간 계산(t 또는 alpha).
 		const float LerpRatio = ClientTimeSinceUpdate / ClientTimeBetweenLastUpdate;
 
 		// 클라이언트 보간.
-		const float ClientNewYaw 
+		const float ClientNewYaw
 			= FMath::Lerp(ServerRotationYaw, EstimateRotationYaw, LerpRatio);
 
 		FRotator ClientRotator = RootComponent->GetComponentRotation();
@@ -241,6 +266,39 @@ void AABFountain::OnRep_ServerLightColor()
 	if (PointLight)
 	{
 		PointLight->SetLightColor(ServerLightColor);
+	}
+}
+
+void AABFountain::ServerRPCChangeLightColor_Implementation()
+{
+	// 이 로직은 서버에서 실행됨.
+	const FLinearColor NewLightColor = FLinearColor(
+		FMath::RandRange(0.0f, 1.0f),
+		FMath::RandRange(0.0f, 1.0f),
+		FMath::RandRange(0.0f, 1.0f)
+	);
+
+	// 멀티캐스트 RPG 호출(서버에서 호출).
+	// -> 서버 포함 모든 클라이언트에서 _Implementation 함수 실행됨.
+	MulticastRPCChangeLightColor(NewLightColor);
+}
+
+void AABFountain::MulticastRPCChangeLightColor_Implementation(
+	const FLinearColor& NewLightColor)
+{
+	// 서버가 아닌 경우, 전달된 값 출력.
+	AB_LOG(
+		LogABNetwork,
+		Log,
+		TEXT("LightColor: %s"),
+		*NewLightColor.ToString()
+	);
+
+	// 컴포넌트를 검색해서 전달 받은(또는 변경한) 라이트 색상 설정.
+	UPointLightComponent* PointLight = GetComponentByClass<UPointLightComponent>();
+	if (PointLight)
+	{
+		PointLight->SetLightColor(NewLightColor);
 	}
 }
 

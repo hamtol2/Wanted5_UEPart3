@@ -52,6 +52,13 @@ public:
 	UFUNCTION()
 	void OnRep_ServerLightColor();
 
+	// Multicast RPC 함수.
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastRPCChangeLightColor(const FLinearColor& NewLightColor);
+
+	UFUNCTION(Server, Unreliable)
+	void ServerRPCChangeLightColor();
+
 	// 회전에 사용할 속성 ( 리플리케이션 옵션 지정 ).
 	UPROPERTY(ReplicatedUsing = OnRep_ServerRotationYaw)
 	float ServerRotationYaw;
