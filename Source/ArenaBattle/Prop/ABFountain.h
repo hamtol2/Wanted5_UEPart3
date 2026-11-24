@@ -23,16 +23,16 @@ protected:
 		TArray<FLifetimeProperty>& OutLifetimeProps
 	) const override;
 
-	virtual void OnActorChannelOpen(
-		class FInBunch& InBunch, class UNetConnection* Connection) override;
+	//virtual void OnActorChannelOpen(
+	//	class FInBunch& InBunch, class UNetConnection* Connection) override;
 
-	virtual bool IsNetRelevantFor(
-		const AActor* RealViewer, 
-		const AActor* ViewTarget, 
-		const FVector& SrcLocation) const override;
+	//virtual bool IsNetRelevantFor(
+	//	const AActor* RealViewer, 
+	//	const AActor* ViewTarget, 
+	//	const FVector& SrcLocation) const override;
 
-	virtual void PreReplication(
-		IRepChangedPropertyTracker& ChangedPropertyTracker) override;
+	//virtual void PreReplication(
+	//	IRepChangedPropertyTracker& ChangedPropertyTracker) override;
 
 public:	
 	// Called every frame
