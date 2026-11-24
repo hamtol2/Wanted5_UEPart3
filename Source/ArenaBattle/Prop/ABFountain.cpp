@@ -6,6 +6,7 @@
 #include <ArenaBattle.h>
 #include <Net/UnrealNetwork.h>
 #include <Components/PointLightComponent.h>
+#include <EngineUtils.h>
 
 // Sets default values
 AABFountain::AABFountain()
@@ -82,15 +83,18 @@ void AABFountain::BeginPlay()
 					//OnRep_ServerLightColor();
 
 					//// 멀티캐스트 RPC로 전달할 색상 값.
-					//const FLinearColor NewLightColor = FLinearColor(
-					//	FMath::RandRange(0.0f, 1.0f),
-					//	FMath::RandRange(0.0f, 1.0f),
-					//	FMath::RandRange(0.0f, 1.0f)
-					//);
+					const FLinearColor NewLightColor = FLinearColor(
+						FMath::RandRange(0.0f, 1.0f),
+						FMath::RandRange(0.0f, 1.0f),
+						FMath::RandRange(0.0f, 1.0f)
+					);
 
-					//// 멀티캐스트 RPG 호출(서버에서 호출).
+					//// 멀티캐스트 RPC 호출(서버에서 호출).
 					//// -> 서버 포함 모든 클라이언트에서 _Implementation 함수 실행됨.
 					//MulticastRPCChangeLightColor(NewLightColor);
+
+					// 클라이언트 RPC 호출(서버에서 호출).
+					ClientRPCChangeLightColor(NewLightColor);
 				}
 			), 1.0f, true
 		);
@@ -103,6 +107,39 @@ void AABFountain::BeginPlay()
 				{
 					// 깨우기.
 					//FlushNetDormancy();
+
+					// 접속한 클라이언트의 플레이어 컨트롤러 가져오기.
+					//for (auto Iterator = GetWorld()->GetPlayerControllerIterator();
+					//	Iterator;
+					//	++Iterator)
+					//{
+					//	// 이터레이터로부터 플레이어 컨트롤러 가져오기.
+					//	APlayerController* PlayerController = Iterator->Get();
+
+					//	// 리슨 서버 입장에서 같은 머신에 있는 클라이언트가 아닌지 확인.
+					//	if (PlayerController
+					//		&& !PlayerController->IsLocalPlayerController())
+					//	{
+					//		// 첫번째 플레이어 컨트롤러에 오너십 설정.
+					//		SetOwner(PlayerController);
+					//		break;
+					//	}
+					//}
+
+					// Range-Based Loop 활용.
+					// EngineUtils.h 헤더 인클루드 필요.
+					for (APlayerController* PlayerController : TActorRange<APlayerController>(GetWorld()))
+					{
+						// 리슨 서버 입장에서 같은 머신에 있는 클라이언트가 아닌지 확인.
+						if (PlayerController
+							&& !PlayerController->IsLocalPlayerController())
+						{
+							// 첫번째 플레이어 컨트롤러에 오너십 설정.
+							SetOwner(PlayerController);
+							break;
+						}
+					}
+
 				}
 			), 10.0f, false
 		);
@@ -110,16 +147,19 @@ void AABFountain::BeginPlay()
 	// 클라이언트.
 	else
 	{
+		// 오너십 설정.
+		//SetOwner(GetWorld()->GetFirstPlayerController());
+
 		// 클라이언트에서 서버 RPC 함수 호출.
-		FTimerHandle Handle;
-		GetWorld()->GetTimerManager().SetTimer(
-			Handle,
-			FTimerDelegate::CreateLambda([&]()
-				{
-					ServerRPCChangeLightColor();
-				}
-			), 1.0f, true
-		);
+		//FTimerHandle Handle;
+		//GetWorld()->GetTimerManager().SetTimer(
+		//	Handle,
+		//	FTimerDelegate::CreateLambda([&]()
+		//		{
+		//			ServerRPCChangeLightColor();
+		//		}
+		//	), 1.0f, true
+		//);
 	}
 }
 
@@ -267,6 +307,32 @@ void AABFountain::OnRep_ServerLightColor()
 	{
 		PointLight->SetLightColor(ServerLightColor);
 	}
+}
+
+void AABFountain::ClientRPCChangeLightColor_Implementation(
+	const FLinearColor& NewLightColor)
+{
+	// 서버가 아닌 경우, 전달된 값 출력.
+	AB_LOG(
+		LogABNetwork,
+		Log,
+		TEXT("LightColor: %s"),
+		*NewLightColor.ToString()
+	);
+
+	// 컴포넌트를 검색해서 전달 받은(또는 변경한) 라이트 색상 설정.
+	UPointLightComponent* PointLight = GetComponentByClass<UPointLightComponent>();
+	if (PointLight)
+	{
+		PointLight->SetLightColor(NewLightColor);
+	}
+}
+
+bool AABFountain::ServerRPCChangeLightColor_Validate()
+{
+	// false는 검증 실패.
+	// 검증에 성공하면 true 반환.
+	return true;
 }
 
 void AABFountain::ServerRPCChangeLightColor_Implementation()

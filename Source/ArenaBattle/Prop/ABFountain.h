@@ -56,8 +56,11 @@ public:
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastRPCChangeLightColor(const FLinearColor& NewLightColor);
 
-	UFUNCTION(Server, Unreliable)
+	UFUNCTION(Server, Unreliable, WithValidation)
 	void ServerRPCChangeLightColor();
+
+	UFUNCTION(Client, Unreliable)
+	void ClientRPCChangeLightColor(const FLinearColor& NewLightColor);
 
 	// 회전에 사용할 속성 ( 리플리케이션 옵션 지정 ).
 	UPROPERTY(ReplicatedUsing = OnRep_ServerRotationYaw)
