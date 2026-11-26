@@ -335,11 +335,11 @@ void AABCharacterPlayer::Attack()
 
 		// 애니메이션 재생.
 		PlayAttackAnimation();
-
-		// 클라이언트에서 명령 처리를 한 뒤에 서버에 전달.
-		// 시간을 보낼 때 서버 기준 시간으로 전달.
-		ServerRPCAttack(GetWorld()->GetGameState()->GetServerWorldTimeSeconds());
 	}
+
+	// 클라이언트에서 명령 처리를 한 뒤에 서버에 전달.
+	// 시간을 보낼 때 서버 기준 시간으로 전달.
+	ServerRPCAttack(GetWorld()->GetGameState()->GetServerWorldTimeSeconds());
 }
 
 void AABCharacterPlayer::PlayAttackAnimation()
@@ -356,7 +356,7 @@ void AABCharacterPlayer::PlayAttackAnimation()
 void AABCharacterPlayer::AttackHitCheck()
 {
 	// 공격 판정은 서버에서만 진행.
-	if (HasAuthority())
+	if (IsLocallyControlled())
 	{
 		// 로그 출력.
 		AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
@@ -367,26 +367,203 @@ void AABCharacterPlayer::AttackHitCheck()
 		const float AttackRange = Stat->GetTotalStat().AttackRange;
 		const float AttackRadius = Stat->GetAttackRadius();
 		const float AttackDamage = Stat->GetTotalStat().Attack;
-		const FVector Start = GetActorLocation() + GetActorForwardVector() * GetCapsuleComponent()->GetScaledCapsuleRadius();
-		const FVector End = Start + GetActorForwardVector() * AttackRange;
+
+		const FVector Forward = GetActorForwardVector();
+
+		const FVector Start = GetActorLocation() + Forward * GetCapsuleComponent()->GetScaledCapsuleRadius();
+		const FVector End = Start + Forward * AttackRange;
 
 		bool HitDetected = GetWorld()->SweepSingleByChannel(OutHitResult, Start, End, FQuat::Identity, CCHANNEL_ABACTION, FCollisionShape::MakeSphere(AttackRadius), Params);
-		if (HitDetected)
+
+		// 시간 가져오기.
+		float HitCheckTime = GetWorld()->GetGameState()->GetServerWorldTimeSeconds();
+
+		// 클라이언트.
+		if (!HasAuthority())
 		{
-			FDamageEvent DamageEvent;
-			OutHitResult.GetActor()->TakeDamage(AttackDamage, DamageEvent, GetController(), this);
+			if (HitDetected)
+			{
+				ServerRPCNotifyHit(OutHitResult, HitCheckTime);
+			}
+			else
+			{
+				ServerRPCNotifyMiss(Start, End, Forward, HitCheckTime);
+			}
+		}
+
+		// 서버
+		else
+		{
+			FColor DebugColor = HitDetected ? FColor::Green : FColor::Red;
+
+			DrawDebugAttackRange(
+				DebugColor,
+				Start,
+				End,
+				Forward
+			);
+
+			// 서버의 경우 판정 결과 확인하지 않고 진행.
+			if (HitDetected)
+			{
+				AttackHitConfirm(OutHitResult.GetActor());
+			}
+		}
+
+		//		if (HitDetected)
+		//		{
+		//			FDamageEvent DamageEvent;
+		//			OutHitResult.GetActor()->TakeDamage(AttackDamage, DamageEvent, GetController(), this);
+		//		}
+		//
+		//#if ENABLE_DRAW_DEBUG
+		//
+		//		FVector CapsuleOrigin = Start + (End - Start) * 0.5f;
+		//		float CapsuleHalfHeight = AttackRange * 0.5f;
+		//		FColor DrawColor = HitDetected ? FColor::Green : FColor::Red;
+		//
+		//		DrawDebugCapsule(GetWorld(), CapsuleOrigin, CapsuleHalfHeight, AttackRadius, FRotationMatrix::MakeFromZ(GetActorForwardVector()).ToQuat(), DrawColor, false, 5.0f);
+		//
+		//#endif
+	}
+}
+
+void AABCharacterPlayer::AttackHitConfirm(AActor* HitActor)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+
+	// 서버에서 실행.
+	if (HasAuthority())
+	{
+		// 대미지 스탯.
+		const float AttackDamage = Stat->GetTotalStat().Attack;
+
+		// 대미지 이벤트 변수.
+		FDamageEvent DamageEvent;
+
+		// 대미지 전달.
+		HitActor->TakeDamage(AttackDamage, DamageEvent, GetController(), this);
+	}
+}
+
+void AABCharacterPlayer::DrawDebugAttackRange(
+	const FColor& DrawColor, FVector TraceStart, FVector TraceEnd, FVector Forward)
+{
+#if ENABLE_DRAW_DEBUG
+
+	const float AttackRange = Stat->GetTotalStat().AttackRange;
+	const float AttackRadius = Stat->GetAttackRadius();
+
+	FVector CapsuleOrigin = TraceStart + (TraceEnd - TraceStart) * 0.5f;
+	float CapsuleHalfHeight = AttackRange * 0.5f;
+	//FColor DrawColor = HitDetected ? FColor::Green : FColor::Red;
+
+	DrawDebugCapsule(
+		GetWorld(), 
+		CapsuleOrigin, 
+		CapsuleHalfHeight, 
+		AttackRadius, 
+		FRotationMatrix::MakeFromZ(Forward).ToQuat(), 
+		DrawColor, 
+		false, 
+		5.0f
+	);
+#endif
+}
+
+void AABCharacterPlayer::ServerRPCNotifyHit_Implementation(
+	const FHitResult& HitResult, float HitCheckTime)
+{
+	// 맞은 액터 정보 얻어오기.
+	AActor* HitActor = HitResult.GetActor();
+
+	// 맞은 액터가 유효한지 확인.
+	if (HitActor)
+	{
+		// 맞은 위치 정보 가져오기.
+		const FVector HitLocation = HitResult.Location;
+
+		// 바운딩 박스 정보 가져오기.
+		const FBox HitBox = HitActor->GetComponentsBoundingBox();
+
+		// 바운딩 박스의 중심 위치.
+		const FVector ActorBoxCenter = HitBox.GetCenter();
+
+		// 충돌 판정에 문제가 없는지 거리 비교.
+		if (FVector::DistSquared(HitLocation, ActorBoxCenter)
+			<= AcceptCheckDistance * AcceptCheckDistance)
+		{
+			AttackHitConfirm(HitActor);
 		}
 
 #if ENABLE_DRAW_DEBUG
 
-		FVector CapsuleOrigin = Start + (End - Start) * 0.5f;
-		float CapsuleHalfHeight = AttackRange * 0.5f;
-		FColor DrawColor = HitDetected ? FColor::Green : FColor::Red;
+		// 맞은 액터를 점으로 표시.
+		DrawDebugPoint(
+			GetWorld(),
+			ActorBoxCenter,
+			50.0f,
+			FColor::Cyan,
+			false,
+			5.0f
+		);
 
-		DrawDebugCapsule(GetWorld(), CapsuleOrigin, CapsuleHalfHeight, AttackRadius, FRotationMatrix::MakeFromZ(GetActorForwardVector()).ToQuat(), DrawColor, false, 5.0f);
+		// 맞은 위치를 점으로 표시.
+		DrawDebugPoint(
+			GetWorld(),
+			HitLocation,
+			50.0f,
+			FColor::Magenta,
+			false,
+			5.0f
+		);
 
 #endif
+
+		// 이미 맞았다고 판정한 상태.
+		DrawDebugAttackRange(
+			FColor::Green,
+			HitResult.TraceStart,
+			HitResult.TraceEnd,
+			HitActor->GetActorForwardVector()
+		);
 	}
+}
+
+bool AABCharacterPlayer::ServerRPCNotifyHit_Validate(
+	const FHitResult& HitResult, float HitCheckTime)
+{
+	// 공격을 처음했을 때는 패스.
+	if (LastAttackStartTime == 0.0f)
+	{
+		return true;
+	}
+
+	return (HitCheckTime - LastAttackStartTime) > AcceptMinCheckTime;
+}
+
+void AABCharacterPlayer::ServerRPCNotifyMiss_Implementation(
+	FVector TraceStart, FVector TraceEnd, FVector TraceDir, float HitCheckTime)
+{
+	// 이미 맞았다고 판정한 상태.
+	DrawDebugAttackRange(
+		FColor::Red,
+		TraceStart,
+		TraceEnd,
+		TraceDir
+	);
+}
+
+bool AABCharacterPlayer::ServerRPCNotifyMiss_Validate(
+	FVector TraceStart, FVector TraceEnd, FVector TraceDir, float HitCheckTime)
+{
+	// 공격을 처음했을 때는 패스.
+	if (LastAttackStartTime == 0.0f)
+	{
+		return true;
+	}
+
+	return (HitCheckTime - LastAttackStartTime) > AcceptMinCheckTime;
 }
 
 void AABCharacterPlayer::OnRep_CanAttack()
