@@ -88,7 +88,7 @@ protected:
 	void ServerRPCAttack(float AttackStartTime);
 
 	// 서버 포함, 모든 클라이언트에 공격 명령 전달을 위한 MulticastRPC.
-	UFUNCTION(NetMulticast, Reliable)
+	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastRPCAttack();
 
 	UFUNCTION()
