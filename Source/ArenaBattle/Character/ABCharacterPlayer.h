@@ -102,15 +102,19 @@ protected:
 	UFUNCTION(NetMulticast, Unreliable)
 	void MulticastRPCAttack();
 
+	// 공격 애니메이션 재생에 사용할 ClientRPC.
+	UFUNCTION(Client, Unreliable)
+	void ClientRPCPlayAnimation(AABCharacterPlayer* CharacterToPlay);
+
 	// 클라이언트에서 무언가 맞았을 때 서버로 판정을 보내는 함수.
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerRPCNotifyHit(const FHitResult& HitResult, float HitCheckTime);
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerRPCNotifyMiss(
-		FVector TraceStart, 
-		FVector TraceEnd, 
-		FVector TraceDir, 
+		FVector_NetQuantize TraceStart, 
+		FVector_NetQuantize TraceEnd,
+		FVector_NetQuantizeNormal TraceDir,
 		float HitCheckTime
 	);
 

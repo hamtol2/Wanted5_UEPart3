@@ -13,6 +13,7 @@
 #include <Engine/DamageEvents.h>
 #include <Net/UnrealNetwork.h>
 #include <GameFramework/GameStateBase.h>
+#include <EngineUtils.h>
 
 #include "UI/ABHUDWidget.h"
 #include "CharacterStat/ABCharacterStatComponent.h"
@@ -471,6 +472,16 @@ void AABCharacterPlayer::DrawDebugAttackRange(
 #endif
 }
 
+void AABCharacterPlayer::ClientRPCPlayAnimation_Implementation(
+	AABCharacterPlayer* CharacterToPlay)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+	if (CharacterToPlay)
+	{
+		CharacterToPlay->PlayAttackAnimation();
+	}
+}
+
 void AABCharacterPlayer::ServerRPCNotifyHit_Implementation(
 	const FHitResult& HitResult, float HitCheckTime)
 {
@@ -543,7 +554,10 @@ bool AABCharacterPlayer::ServerRPCNotifyHit_Validate(
 }
 
 void AABCharacterPlayer::ServerRPCNotifyMiss_Implementation(
-	FVector TraceStart, FVector TraceEnd, FVector TraceDir, float HitCheckTime)
+	FVector_NetQuantize TraceStart,
+	FVector_NetQuantize TraceEnd, 
+	FVector_NetQuantizeNormal TraceDir,
+	float HitCheckTime)
 {
 	// 이미 맞았다고 판정한 상태.
 	DrawDebugAttackRange(
@@ -555,7 +569,10 @@ void AABCharacterPlayer::ServerRPCNotifyMiss_Implementation(
 }
 
 bool AABCharacterPlayer::ServerRPCNotifyMiss_Validate(
-	FVector TraceStart, FVector TraceEnd, FVector TraceDir, float HitCheckTime)
+	FVector_NetQuantize TraceStart, 
+	FVector_NetQuantize TraceEnd, 
+	FVector_NetQuantizeNormal TraceDir, 
+	float HitCheckTime)
 {
 	// 공격을 처음했을 때는 패스.
 	if (LastAttackStartTime == 0.0f)
@@ -632,7 +649,28 @@ void AABCharacterPlayer::ServerRPCAttack_Implementation(float AttackStartTime)
 	PlayAttackAnimation();
 
 	// 서버에 있는 액터에서 실행.
-	MulticastRPCAttack();
+	//MulticastRPCAttack();
+
+	// 클라이언트 RPC.
+	// Range-Based Loop 활용.
+	for (APlayerController* PlayerController 
+		: TActorRange<APlayerController>(GetWorld()))
+	{
+		if (PlayerController && GetController() != PlayerController)
+		{
+			if (!PlayerController->IsLocalController())
+			{
+				AABCharacterPlayer* OtherPlayer
+					= Cast<AABCharacterPlayer>(PlayerController->GetPawn());
+
+				if (OtherPlayer)
+				{
+					// ClientRPC 호출.
+					OtherPlayer->ClientRPCPlayAnimation(this);
+				}
+			}
+		}
+	}
 }
 
 void AABCharacterPlayer::MulticastRPCAttack_Implementation()
