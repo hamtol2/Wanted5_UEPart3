@@ -656,8 +656,10 @@ void AABCharacterPlayer::ServerRPCAttack_Implementation(float AttackStartTime)
 	for (APlayerController* PlayerController 
 		: TActorRange<APlayerController>(GetWorld()))
 	{
+		// 공격 명령을 보낸 클라이언트 캐릭터에 대응되는 서버 측 액터 제외.
 		if (PlayerController && GetController() != PlayerController)
 		{
+			// 리슨 서버가 제어하는 로컬 클라이언트 액터 제외.
 			if (!PlayerController->IsLocalController())
 			{
 				AABCharacterPlayer* OtherPlayer
